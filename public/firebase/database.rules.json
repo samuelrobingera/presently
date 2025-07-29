@@ -1,0 +1,35 @@
+// Firestore Security Rules
+// Copy this to Firestore Database > Rules in Firebase Console
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read and write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // All authenticated users can read rooms
+    match /rooms/{roomId} {
+      allow read: if request.auth != null;
+      // Only admin users can write to rooms (you can modify this later)
+      allow write: if request.auth != null && 
+        (request.auth.token.admin == true || 
+         resource == null || 
+         resource.data.occupiedBy == request.auth.uid);
+    }
+    
+    // Sessions - users can only access their own sessions
+    match /sessions/{sessionId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         request.auth.uid == request.resource.data.userId);
+    }
+    
+    // Analytics (read-only for authenticated users)
+    match /analytics/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only server can write analytics
+    }
+  }
+}
