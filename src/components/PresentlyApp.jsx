@@ -3,14 +3,14 @@ import { Clock, Play, Pause, Square, SkipForward, Calendar, Settings, User, LogO
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCD9puwJT9k3h4Q1lrXE7_cx6pOP1a2vOk",
-  authDomain: "presently-6151f.firebaseapp.com",
-  databaseURL: "https://presently-6151f-default-rtdb.firebaseio.com/", // You'll need to enable this
-  projectId: "presently-6151f",
-  storageBucket: "presently-6151f.firebasestorage.app",
-  messagingSenderId: "761425073253",
-  appId: "1:761425073253:web:ed78ddc9521d684674e28c",
-  measurementId: "G-8EM4S70843"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 const PresentlyApp = () => {
