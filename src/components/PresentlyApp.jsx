@@ -65,10 +65,10 @@ const PresentlyApp = () => {
           addNotification('Connected to Firebase', 'success');
           
           // Initialize auth listener
-          initializeAuth();
+          initializeAuth(true);
           
           // Load rooms
-          await loadRooms();
+          await loadRooms(true);
           
         } else {
           // Fallback to demo mode if Firebase is not available
@@ -99,8 +99,8 @@ const PresentlyApp = () => {
   }, []);
 
   // Initialize authentication
-  const initializeAuth = () => {
-    if (!firebaseInitialized || !window.firebase.auth) return;
+  const initializeAuth = (isInitialized = firebaseInitialized) => {
+    if (!isInitialized || !window.firebase.auth) return;
 
     unsubscribeAuth.current = window.firebase.auth().onAuthStateChanged((user) => {
       if (user) {
@@ -121,8 +121,8 @@ const PresentlyApp = () => {
   };
 
   // Load rooms from Firestore
-  const loadRooms = async () => {
-    if (!firebaseInitialized || offlineMode) {
+  const loadRooms = async (isInitialized = firebaseInitialized) => {
+    if (!isInitialized || offlineMode) {
       loadDemoData();
       return;
     }
