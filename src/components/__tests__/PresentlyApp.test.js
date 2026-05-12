@@ -1,44 +1,90 @@
 import React from 'react';
-import { render, act, screen, fireEvent } from '@testing-library/react';
+import { render, act, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 // 1. Setup Firebase Global Mock with functional definitions
 const mockFirestore = {
-  collection: jest.fn(() => ({
-    where: jest.fn(() => ({
-      get: jest.fn(() => Promise.resolve({
-        forEach: (callback) => {
-          callback({ id: 'room1', data: () => ({ name: 'Conference Room A', capacity: 50, available: true, active: true }) });
+  collection: (name) => {
+    const query = {
+      where: jest.fn(() => query),
+      orderBy: jest.fn(() => query),
+      get: jest.fn(() => {
+        if (name === 'organizations') {
+          return Promise.resolve({
+            empty: false,
+            docs: [{ id: 'org1', data: () => ({ name: 'Acme Corp', domain: 'acme.com' }) }]
+          });
         }
-      }))
+        if (name === 'rooms') {
+          return Promise.resolve({
+            forEach: (callback) => {
+              callback({ id: 'room1', data: () => ({ name: 'Conference Room A', capacity: 50, available: true, active: true, orgId: 'org1' }) });
+            }
+          });
+        }
+        if (name === 'bookings') {
+          return Promise.resolve({
+            forEach: (callback) => {
+              callback({ id: 'booking1', data: () => ({ roomId: 'room1', startTime: { toDate: () => new Date() }, status: 'scheduled' }) });
+            }
+          });
+        }
+        return Promise.resolve({ empty: true, docs: [], forEach: () => {} });
+      })
+    };
+    return query;
+  },
+  doc: jest.fn(() => ({
+    get: jest.fn(() => Promise.resolve({ 
+      exists: true, 
+      data: () => ({ settings: { preparationTime: 5, presentationTime: 30, qaTime: 10 } }) 
     })),
-    doc: jest.fn(() => ({
-      get: jest.fn(() => Promise.resolve({ 
-        exists: true, 
-        data: () => ({ settings: { preparationTime: 5, presentationTime: 30, qaTime: 10 } }) 
-      })),
-      set: jest.fn(() => Promise.resolve()),
-      update: jest.fn(() => Promise.resolve())
-    }))
+    set: jest.fn(() => Promise.resolve()),
+    update: jest.fn(() => Promise.resolve())
   })),
-  FieldValue: { serverTimestamp: () => 'mock-timestamp' }
+  add: jest.fn(() => Promise.resolve({ id: 'new-doc-id' }))
 };
 
-const mockAuth = {
+let capturedAuthCallbacks = [];
+const mockAuthInstance = {
   onAuthStateChanged: jest.fn((cb) => {
-    // Force immediate login state
-    cb({
+    capturedAuthCallbacks.push(cb);
+    // Initial state: no user
+    cb(null);
+    return () => {}; // Unsubscribe
+  }),
+  signInWithPopup: jest.fn(() => Promise.resolve({ 
+    user: { 
       uid: 'test-uid',
       displayName: 'Test User',
-      email: 'test@example.com',
+      email: 'test@acme.com',
       photoURL: 'https://example.com/photo.jpg'
-    });
-    return jest.fn(); // Unsubscribe
-  }),
-  signInWithPopup: jest.fn(() => Promise.resolve({ user: { uid: 'test-uid' } })),
-  signOut: jest.fn(() => Promise.resolve()),
-  GoogleAuthProvider: function() { this.addScope = jest.fn(); },
-  FacebookAuthProvider: function() { this.addScope = jest.fn(); }
+    } 
+  })),
+  signOut: jest.fn(() => Promise.resolve())
+};
+
+class MockGoogleAuthProvider {
+  constructor() {
+    this.addScope = jest.fn();
+  }
+}
+
+class MockFacebookAuthProvider {
+  constructor() {
+    this.addScope = jest.fn();
+  }
+}
+
+const authMock = jest.fn(() => mockAuthInstance);
+authMock.GoogleAuthProvider = MockGoogleAuthProvider;
+authMock.FacebookAuthProvider = MockFacebookAuthProvider;
+
+const firestoreFunc = () => mockFirestore;
+firestoreFunc.FieldValue = { serverTimestamp: () => 'mock-timestamp' };
+firestoreFunc.Timestamp = { 
+  now: () => ({ toMillis: () => Date.now() }),
+  fromDate: (date) => ({ toDate: () => date })
 };
 
 const mockDatabase = {
@@ -47,26 +93,17 @@ const mockDatabase = {
     off: jest.fn(),
     update: jest.fn(() => Promise.resolve()),
     remove: jest.fn(() => Promise.resolve())
-  })),
-  ServerValue: { TIMESTAMP: 'mock-timestamp' }
+  }))
 };
 
-// CRITICAL: Define functions that return the mock objects
-const firebase = {
+window.firebase = {
   apps: [],
   initializeApp: jest.fn(),
-  auth: jest.fn(() => mockAuth),
-  firestore: jest.fn(() => mockFirestore),
-  database: jest.fn(() => mockDatabase)
+  auth: authMock,
+  firestore: firestoreFunc,
+  database: () => mockDatabase
 };
-
-// Add properties to the functions themselves
-firebase.auth.GoogleAuthProvider = mockAuth.GoogleAuthProvider;
-firebase.auth.FacebookAuthProvider = mockAuth.FacebookAuthProvider;
-firebase.firestore.FieldValue = mockFirestore.FieldValue;
-firebase.database.ServerValue = mockDatabase.ServerValue;
-
-window.firebase = firebase;
+window.firebase.database.ServerValue = { TIMESTAMP: 'mock-timestamp' };
 
 // 2. Import the component AFTER mocks are set up
 import PresentlyApp from '../PresentlyApp';
@@ -76,6 +113,8 @@ navigator.vibrate = jest.fn();
 describe('PresentlyApp Timer Logic', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    capturedAuthCallbacks = [];
+    authMock.mockReturnValue(mockAuthInstance);
   });
 
   afterEach(() => {
@@ -84,28 +123,67 @@ describe('PresentlyApp Timer Logic', () => {
   });
 
   test('timer transitions phases correctly', async () => {
+    // Render component
     render(<PresentlyApp />);
     
-    // Initial loading
+    // Handle async initialization and waitForFirebaseGlobal
     await act(async () => {
-      jest.advanceTimersByTime(100);
+      jest.advanceTimersByTime(1000);
     });
 
-    // Room Selection
-    const room = await screen.findByText(/Conference Room A/i);
-    fireEvent.click(room);
+    // Check Landing Page
+    const launchButton = await screen.findByText(/Start Timing Now/i);
+    expect(launchButton).toBeInTheDocument();
+
+    // Click Launch App -> Switches view to 'app'
+    fireEvent.click(launchButton);
+
+    // Mock successful login by triggering the callback directly
+    await act(async () => {
+        for (const cb of capturedAuthCallbacks) {
+            await cb({
+                uid: 'test-uid',
+                displayName: 'Test User',
+                email: 'test@acme.com',
+                photoURL: 'https://example.com/photo.jpg'
+            });
+        }
+    });
+
+    // Advance timers to trigger useEffects and async updates
+    await act(async () => {
+        jest.advanceTimersByTime(2000);
+    });
+
+    // Check for "Conference Room A" as evidence that loadRooms finished
+    // We use waitFor here to be more resilient
+    await waitFor(async () => {
+        const room = screen.queryByText(/Conference Room A/i);
+        if (!room) {
+            await act(async () => {
+                jest.advanceTimersByTime(1000);
+            });
+            throw new Error('Room not found yet');
+        }
+        expect(room).toBeInTheDocument();
+    }, { timeout: 10000 });
+
+    const room = screen.getByText(/Conference Room A/i);
 
     // Start timer
+    fireEvent.click(room);
     const startButton = screen.getByText(/Start/i);
     fireEvent.click(startButton);
 
     expect(screen.getByText(/preparation Phase/i)).toBeInTheDocument();
 
     // Advance Time (5 mins)
-    await act(async () => {
-      jest.advanceTimersByTime(5 * 60 * 1000);
-    });
+    for (let i = 0; i < 300; i++) {
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
 
-    expect(screen.getByText(/presentation Phase/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/presentation Phase/i).length).toBeGreaterThan(0);
   });
 });

@@ -20,10 +20,12 @@
 - Automatic room booking during sessions
 
 ### ⏱️ **Advanced Timer System**
+- **Immediate Feedback**: Local state updates instantly for 1:1 responsiveness even on slow networks.
 - **Multi-phase timing**: Preparation → Presentation → Q&A → Overtime
 - **Real-time synchronization** across multiple devices
 - **Auto-phase transitions** with customizable durations
 - **Manual controls**: Start, Pause, Resume, Stop, Skip
+- **Smart Haptics**: Professional vibration alerts at 5, 2, and 1-minute marks.
 
 ### 🎛️ **Customizable Settings**
 - Individual phase duration configuration
