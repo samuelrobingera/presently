@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "presently-6151f",
     "public": "build",
     "ignore": [
       "firebase.json",
@@ -12,5 +13,11 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "firestore": {
+    "rules": "public/firebase/firestore.rules"
+  },
+  "database": {
+    "rules": "public/firebase/database.rules.json"
   }
 }
