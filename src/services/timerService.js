@@ -16,23 +16,27 @@ import { db, rtdb } from '../config/firebase';
 
 export const timerService = {
   createSession: async (sessionId, sessionData, isDemo = false) => {
+    // 1. Initialize session in RTDB for real-time sync (Always do this for pairing to work)
+    try {
+      await update(ref(rtdb, `timers/${sessionId}`), {
+        ...sessionData,
+        updatedAt: rtdbTimestamp()
+      });
+    } catch (rtdbError) {
+      console.error('RTDB session creation failed:', rtdbError);
+    }
+
     if (isDemo) return;
 
     try {
-      // 1. Create session in Firestore for persistence
+      // 2. Create session in Firestore for long-term persistence
       await setDoc(doc(db, 'sessions', sessionId), {
         ...sessionData,
         createdAt: firestoreTimestamp(),
         status: 'active'
       });
-
-      // 2. Initialize session in RTDB for real-time sync
-      await update(ref(rtdb, `timers/${sessionId}`), {
-        ...sessionData,
-        updatedAt: rtdbTimestamp()
-      });
     } catch (error) {
-      console.error('Error creating session:', error);
+      console.error('Error creating Firestore session:', error);
       throw error;
     }
   },
@@ -52,29 +56,35 @@ export const timerService = {
   },
 
   updateTimer: async (sessionId, updates, isDemo = false) => {
-    if (isDemo || !sessionId) return;
+    if (!sessionId) return;
 
     try {
+      // RTDB sync must always happen for pairing/syncing to work
       await update(ref(rtdb, `timers/${sessionId}`), {
         ...updates,
         updatedAt: rtdbTimestamp()
       });
     } catch (error) {
-      console.error('Error updating timer:', error);
+      console.error('Error updating timer in RTDB:', error);
     }
   },
 
   completeSession: async (sessionId, roomId, isDemo = false) => {
-    if (isDemo || !sessionId) return;
+    if (!sessionId) return;
 
     try {
-      // 1. Update Firestore session
+      // 1. Clear session in RTDB (Always do this to stop pairing views)
+      await remove(ref(rtdb, `timers/${sessionId}`));
+
+      if (isDemo) return;
+
+      // 2. Update Firestore session for archival
       await updateDoc(doc(db, 'sessions', sessionId), {
         completedAt: firestoreTimestamp(),
         status: 'completed'
       });
 
-      // 2. Clear room status in Firestore if needed (skip for personal/virtual rooms)
+      // 3. Clear room status in Firestore (skip for personal/virtual rooms)
       if (roomId && !roomId.startsWith('personal-room-')) {
         await updateDoc(doc(db, 'rooms', roomId), {
           available: true,
@@ -83,9 +93,6 @@ export const timerService = {
           occupiedAt: null
         });
       }
-
-      // 3. Remove from RTDB
-      await remove(ref(rtdb, `timers/${sessionId}`));
     } catch (error) {
       console.error('Error completing session:', error);
       throw error;

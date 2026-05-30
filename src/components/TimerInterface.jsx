@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Square, SkipForward, Database, Plus, Minus, AlertCircle, Share2, Check } from 'lucide-react';
+import { Play, Pause, Square, SkipForward, Database, Plus, Minus, AlertCircle, Share2, Check, AlertTriangle } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
 import { useAuth } from '../context/AuthContext';
 import PairingModal from './ui/PairingModal';
@@ -20,7 +20,18 @@ const TimerInterface = () => {
   const [isFlashing, setIsFlashing] = useState(false);
   const [showPairingModal, setShowPairingModal] = useState(false);
 
+  const [showConfirmStop, setShowConfirmStop] = useState(false);
+
   const isAdmin = userRole === 'owner' || userRole === 'admin';
+
+  const handleTerminateClick = () => {
+    setShowConfirmStop(true);
+  };
+
+  const handleConfirmStop = async () => {
+    await stopTimer();
+    setShowConfirmStop(false);
+  };
 
   const handleShare = () => {
     setShowPairingModal(true);
@@ -113,7 +124,7 @@ const TimerInterface = () => {
             <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">{currentRoom.name}</h2>
           </div>
           <button
-            onClick={() => stopTimer()}
+            onClick={handleTerminateClick}
             className="bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 px-8 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all border border-slate-100 hover:border-rose-100"
           >
             Terminate Session
@@ -202,6 +213,34 @@ const TimerInterface = () => {
           sessionId={timerState.sessionId} 
           onClose={() => setShowPairingModal(false)} 
         />
+      )}
+
+      {showConfirmStop && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 border border-slate-100 text-center">
+            <div className="w-20 h-20 bg-rose-50 rounded-3xl flex items-center justify-center mx-auto mb-8">
+              <AlertTriangle className="w-10 h-10 text-rose-600" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tighter uppercase">Terminate Session?</h3>
+            <p className="text-slate-500 font-bold mb-10 leading-relaxed">
+              This will immediately disconnect all paired monitors and clear the room status. This action cannot be undone.
+            </p>
+            <div className="flex flex-col space-y-4">
+              <button 
+                onClick={handleConfirmStop}
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-rose-200 transition-all uppercase tracking-widest"
+              >
+                Confirm Termination
+              </button>
+              <button 
+                onClick={() => setShowConfirmStop(false)}
+                className="w-full bg-slate-50 hover:bg-slate-100 text-slate-400 font-black py-5 rounded-2xl transition-all uppercase tracking-widest"
+              >
+                Keep Active
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
