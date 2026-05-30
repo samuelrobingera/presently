@@ -1,49 +1,62 @@
-# Presently 🕒
+# Presently: Enterprise Presentation Management 🕒
 
-Professional presentation timing for speakers. Ensure your presentations stay on track with real-time synchronization and phase management.
+Presently is a professional, real-time stage timer and facility event-management SaaS platform. It ensures precision timekeeping for live presentations using a serverless real-time web infrastructure.
 
 ## 🚀 Live Demo
 Test the application now at: **[https://presently-6151f.web.app](https://presently-6151f.web.app)**
 
-## 🛠️ Instructions for Testers
+## 🚀 Key Features
 
-### 1. Initial Setup
-When you first open the live site, you might see an empty list of rooms. To populate the demo rooms, follow these steps:
-1. Open the site in your browser.
-2. Open the **Developer Console** (Press `F12` or `Ctrl+Shift+I`).
-3. Type the following command and press Enter:
-   ```javascript
-   setupPresentlyData();
+- **Tri-Phase State Engine:** Linear automation through Preparation, Presentation, and Q&A phases with autonomous transitions.
+- **Negative Overtime Tracking:** Critical tracking of schedule slippage with escalating visual alerts and pulsating signals.
+- **Enterprise SaaS Dashboard:** Multi-tenant registry for managing physical rooms, licensing, and facility-wide inventory.
+- **Zero-Friction Display:** Unauthenticated, anonymous pairing for downstage monitors (DSM) and transparent video overlays via `/display/:sessionId`.
+- **High-Frequency Sync:** Sub-second state mirroring across all devices via Firebase Realtime Database.
+- **Professional RBAC:** Strict separation of Individual "Pro-Sumer" access from Global Enterprise Admin authority.
+- **Facility Analytics:** Data-driven insights into room utilization, peak hours, and speaker punctuality.
+
+## 🛠️ Technical Stack
+
+- **Frontend:** React 18, Tailwind CSS, Lucide Icons
+- **Backend:** Firebase (Auth, Firestore, Realtime Database)
+- **Routing:** React Router v6
+- **Architecture:** Service-oriented modular structure with React Context API.
+
+## 📦 Getting Started
+
+1. **Install Dependencies:**
+   ```bash
+   npm install
    ```
-4. Refresh the page. You should now see 5 sample conference rooms.
 
-### 2. Testing Features
-- **Sign In:** Use your Google or Facebook account.
-- **Select a Room:** Pick any available room to enter the timer view.
-- **Run a Session:** Start the timer and watch it transition from *Preparation* to *Presentation* to *Q&A*.
-- **Sync Check:** Open the same session link on your phone and laptop simultaneously to see the timer sync in real-time.
+2. **Environment Setup:**
+   Create a `.env` file based on `.env.example` with your Firebase credentials.
 
-## Features
-- **Multi-Phase Timing:** Automatically transitions through Preparation, Presentation, and Q&A phases.
-- **Real-Time Sync:** Synchronizes timer state across devices using Firebase Realtime Database.
-- **Room Management:** Tracks room availability and current sessions.
-- **Vibration Alerts:** Haptic feedback at critical thresholds (5, 2, and 1 minute remaining).
-- **Authentication:** Secure login via Google and Facebook.
-- **Landing Page:** A professional welcome experience for new users.
+3. **Development Mode:**
+   ```bash
+   npm start
+   ```
 
-## 🗺️ Product Roadmap & Backlog
+4. **Production Build:**
+   ```bash
+   npm run build
+   ```
 
-### Phase 5: Monetization & Integration (Completed ✅)
-- [x] **SaaS Subscriptions:** Management interface for organizational billing plans.
-- [x] **Platform Integrations:** Webhook foundation for Microsoft Teams, Slack, and Discord.
-- [x] **Advanced Analytics:** Live dashboard for room utilization and speaker punctuality.
-- [x] **Multi-Admin Roles:** Team management and role-based access control.
+## 🔐 Deployment
 
-## 🛠️ Tech Stack
-- **Frontend:** React, Tailwind CSS, Lucide React
-- **Backend:** Firebase (Authentication, Firestore, Realtime Database)
-- **Deployment:** Firebase Hosting
+Deploy to Firebase Hosting:
+```bash
+firebase deploy
+```
 
-## Getting Started (Local Development)
-... (rest of the installation steps)
+## 🗺️ Product Roadmap
 
+- [x] **Phase 1: Modularization:** Transition to NPM SDK and service-based architecture.
+- [x] **Phase 2: State Engine:** Implementation of linear tri-phase logic and overtime tracking.
+- [x] **Phase 3: Multi-Tenancy:** Organization dashboards, billing, and room management.
+- [ ] **Phase 4: Advanced Display:** QR-code pairing and customizable branding.
+- [ ] **Phase 5: Haptic Telemetry:** Wear OS and mobile background sync alerts.
+
+## 📜 License
+
+Proprietary Enterprise SaaS. All Rights Reserved.

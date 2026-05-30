@@ -4,23 +4,23 @@
 Presently is a professional Enterprise SaaS platform for presentation timing, room management, and speaker success.
 
 ## Core Architectural Pillars
-- **Web-First Sync:** Zero-installation synchronization using Firebase Realtime Database (RTDB).
-- **Scheduled Automation:** Background engine triggers sessions automatically based on Firestore `bookings`.
-- **Organizational Tenancy:** Domain-based organization detection (e.g., `@acme.com`) for custom configurations and room fleets.
+- **Modular Infrastructure:** Decoupled service layer (`src/services`) and state management (`src/context`) using the Firebase NPM SDK.
+- **Tri-Phase State Engine:** Linear state machine (Prep -> Present -> Q&A -> Overtime) with automatic transitions and negative-counting overtime.
+- **Multi-Tenant SaaS:** RBAC hierarchy separating "Pro-Sumer" Presenters from "Enterprise" Admins/Owners.
+- **Zero-Friction Display:** Anonymous pairing protocol for unauthenticated stage monitors via `/display/:sessionId`.
 
 ## Implementation Guidelines
-- **UI/UX Style:** High-fidelity design using Tailwind CSS, `rounded-3xl` containers, glassmorphism, and blue-to-purple gradients.
+- **UI/UX Style:** High-fidelity design using Tailwind CSS, `rounded-3xl` containers, glassmorphism, and bold typography.
 - **Data Model:** 
-    - `organizations`: Org settings, domains, and branding.
-    - `rooms`: Associated with `orgId`.
-    - `bookings`: Scheduled slots with `phaseConfig`.
-    - `sessions`: Live timer state mirrored to RTDB.
+    - `users`: Profiles and role settings.
+    - `organizations`: Multi-tenant settings, billing, and domains.
+    - `rooms`: Physical and virtual venue registry.
+    - `sessions`: Live telemetry mirrored to RTDB and archived in Firestore.
 
 ## Technical Implementation Standards
-- **State Synchronization:** Always update local React state *immediately* for UI responsiveness. Background synchronization with Realtime Database (RTDB) should follow to handle multi-device mirroring without blocking the local timer thread.
-- **Haptic Alerts:** Use `navigator.vibrate` for warning thresholds. Ensure logic prevents repeating vibrations on every second by tracking fired thresholds. Use `Math.ceil` for minute-based countdown alerts to ensure accuracy in short phases.
-- **Deployment:** Production builds must be verified with a hard refresh to bypass service worker or browser caching of static assets.
-- **Integrations:** Webhook-based foundation for Microsoft Teams, Slack, and Discord alerts.
+- **State Synchronization:** Local state updates immediately; background sync with Firebase RTDB ensures sub-second multi-device mirroring.
+- **Visual Matrix:** Heavy reliance on color signaling (Blue, Green, Purple, Red) and escalating pulses for overtime.
+- **Analytics Telemetry:** Track session duration and speaker punctuality at session termination.
 
 ## Workflow & Deployment
 - **Local Dev:** `npm start`

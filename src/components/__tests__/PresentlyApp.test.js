@@ -107,6 +107,8 @@ window.firebase.database.ServerValue = { TIMESTAMP: 'mock-timestamp' };
 
 // 2. Import the component AFTER mocks are set up
 import PresentlyApp from '../PresentlyApp';
+import { AuthProvider } from '../../context/AuthContext';
+import { TimerProvider } from '../../context/TimerContext';
 
 navigator.vibrate = jest.fn();
 
@@ -123,8 +125,14 @@ describe('PresentlyApp Timer Logic', () => {
   });
 
   test('timer transitions phases correctly', async () => {
-    // Render component
-    render(<PresentlyApp />);
+    // Render component with providers
+    render(
+      <AuthProvider>
+        <TimerProvider>
+          <PresentlyApp />
+        </TimerProvider>
+      </AuthProvider>
+    );
     
     // Handle async initialization and waitForFirebaseGlobal
     await act(async () => {
