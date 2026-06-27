@@ -14,13 +14,14 @@ Test the application now at: **[https://presently-6151f.web.app](https://present
 - **High-Frequency Sync:** Sub-second state mirroring across all devices via Firebase Realtime Database.
 - **Professional RBAC:** Strict separation of Individual "Pro-Sumer" access from Global Enterprise Admin authority.
 - **Facility Analytics:** Data-driven insights into room utilization, peak hours, and speaker punctuality.
+- **Picture-in-Picture Overlay:** Minimalist, translucent floating timer that overlays slides using the browser's Document Picture-in-Picture API, with automatic styling injection and pop-up fallbacks.
 
 ## 🛠️ Technical Stack
 
 - **Frontend:** React 18, Tailwind CSS, Lucide Icons
 - **Backend:** Firebase (Auth, Firestore, Realtime Database)
-- **Routing:** React Router v6
-- **Architecture:** Service-oriented modular structure with React Context API.
+- **Routing:** React Router v7
+- **Architecture:** Clean, modular structure with decoupled services (`src/services`) and lightweight state context synchronization.
 
 ## 📦 Getting Started
 
@@ -54,8 +55,9 @@ firebase deploy
 - [x] **Phase 1: Modularization:** Transition to NPM SDK and service-based architecture.
 - [x] **Phase 2: State Engine:** Implementation of linear tri-phase logic and overtime tracking.
 - [x] **Phase 3: Multi-Tenancy:** Organization dashboards, billing, and room management.
-- [ ] **Phase 4: Advanced Display:** QR-code pairing and customizable branding.
-- [ ] **Phase 5: Haptic Telemetry:** Wear OS and mobile background sync alerts.
+- [x] **Phase 4: Picture-in-Picture (PiP) Overlay:** Native floating countdown timer using the Document PiP API.
+- [x] **Phase 5: Code Cleanup & Tech Debt:** Removed legacy/duplicate configuration assets (such as redundant files in the `public/` folder).
+- [ ] **Phase 6: Haptic Telemetry:** Wear OS and mobile background sync alerts.
 
 ## 📜 License
 
