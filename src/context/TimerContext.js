@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import { useDemoTimer } from './DemoTimerContext';
 import { timerService } from '../services/timerService';
 import { roomService } from '../services/roomService';
+import { offlineStorage } from '../utils/offlineStorage';
+import { syncService } from '../services/syncService';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { phaseConfigService } from '../services/phaseConfigService';
 
 const TimerContext = createContext();
 
@@ -9,12 +14,16 @@ export const useTimer = () => useContext(TimerContext);
 
 export const TimerProvider = ({ children }) => {
   const { user, organization, isDemo } = useAuth();
+  const { isOnline, wasOffline } = useNetworkStatus();
+  const demoTimerContext = useDemoTimer();
   const [currentRoom, setCurrentRoom] = useState(null);
+  const [phaseConfig, setPhaseConfig] = useState(null);
   const [timerState, setTimerState] = useState({
     isRunning: false,
     timeRemaining: 300000,
     totalTime: 300000,
     phase: 'preparation',
+    phaseIndex: 0,
     sessionId: null,
     overtimeSeconds: 0
   });
@@ -28,19 +37,66 @@ export const TimerProvider = ({ children }) => {
   });
 
   const timerRef = useRef(null);
+  const lastSyncTimeRef = useRef(0);
   const [firedThresholds, setFiredThresholds] = useState([]);
+  const hasReconciledRef = useRef(false);
+
+  // Restore state from offline storage on mount
+  useEffect(() => {
+    const restoreOfflineState = async () => {
+      const savedState = await offlineStorage.getTimerState();
+      if (savedState && savedState.sessionId) {
+        setTimerState(prev => ({
+          ...prev,
+          ...savedState,
+          lastUpdated: Date.now()
+        }));
+      }
+    };
+
+    restoreOfflineState();
+  }, []);
+
+  // Reconcile state when coming back online
+  useEffect(() => {
+    const reconcile = async () => {
+      if (wasOffline && isOnline && !hasReconciledRef.current && timerState.sessionId) {
+        hasReconciledRef.current = true;
+
+        const result = await syncService.reconcileState(timerState, isDemo);
+
+        if (result.success && result.adjustedState) {
+          setTimerState(prev => ({
+            ...prev,
+            ...result.adjustedState
+          }));
+        }
+
+        setTimeout(() => {
+          hasReconciledRef.current = false;
+        }, 5000);
+      }
+    };
+
+    reconcile();
+  }, [wasOffline, isOnline, timerState.sessionId, isDemo]);
 
   // Timer countdown effect
   useEffect(() => {
-    if (timerState.isRunning) {
+    if (timerState.isRunning && phaseConfig) {
       timerRef.current = setInterval(() => {
         setTimerState(prev => {
           let newTime = prev.timeRemaining;
-          let newPhase = prev.phase;
+          let newPhaseIndex = prev.phaseIndex;
           let newTotalTime = prev.totalTime;
           let newOvertimeSeconds = prev.overtimeSeconds;
+          let shouldSync = false;
 
-          if (newPhase === 'overtime') {
+          const currentPhase = phaseConfig.phases[prev.phaseIndex];
+
+          // Handle countdown
+          if (currentPhase?.durationMinutes === 0) {
+            // Infinite phase (overtime)
             newOvertimeSeconds += 1;
             newTime = 0;
           } else {
@@ -48,38 +104,53 @@ export const TimerProvider = ({ children }) => {
           }
 
           // Auto-transition logic
-          if (newTime === 0 && newPhase !== 'overtime') {
-            const phases = ['preparation', 'presentation', 'q&a', 'overtime'];
-            const currentIndex = phases.indexOf(newPhase);
-            if (currentIndex < phases.length - 1) {
-              newPhase = phases[currentIndex + 1];
-              setFiredThresholds([]);
+          if (newTime === 0 && currentPhase?.autoAdvance && newPhaseIndex < phaseConfig.phases.length - 1) {
+            newPhaseIndex += 1;
+            const nextPhase = phaseConfig.phases[newPhaseIndex];
+            setFiredThresholds([]);
+            shouldSync = true; // Always sync on phase change
 
-              switch (newPhase) {
-                case 'presentation':
-                  newTime = (isDemo && !organization ? 20 : settings.presentationTime) * 60000;
-                  break;
-                case 'q&a':
-                  newTime = (isDemo && !organization ? 5 : settings.qaTime) * 60000;
-                  break;
-                case 'overtime':
-                  newTime = 0;
-                  newOvertimeSeconds = 0;
-                  break;
-              }
-              newTotalTime = newTime;
+            if (nextPhase.durationMinutes === 0) {
+              // Infinite phase (overtime)
+              newTime = 0;
+              newOvertimeSeconds = 0;
+            } else {
+              newTime = nextPhase.durationMinutes * 60000;
             }
+            newTotalTime = newTime;
           }
 
-          const updates = { 
-            timeRemaining: newTime, 
-            phase: newPhase, 
+          const updates = {
+            timeRemaining: newTime,
+            phaseIndex: newPhaseIndex,
+            phase: phaseConfig.phases[newPhaseIndex]?.id || 'preparation',
             totalTime: newTotalTime,
-            overtimeSeconds: newOvertimeSeconds
+            overtimeSeconds: newOvertimeSeconds,
+            lastUpdated: Date.now()
           };
 
-          if (prev.sessionId) {
-            timerService.updateTimer(prev.sessionId, updates, isDemo);
+          // Persist to offline storage on every tick
+          offlineStorage.saveTimerState({
+            ...prev,
+            ...updates,
+            sessionId: prev.sessionId,
+            roomId: prev.roomId,
+            userId: prev.userId,
+            startedAt: prev.startedAt
+          });
+
+          // Optimize Firebase writes: sync only every 5 seconds or on phase change
+          const now = Date.now();
+          const timeSinceLastSync = now - lastSyncTimeRef.current;
+
+          if (prev.sessionId && (shouldSync || timeSinceLastSync >= 5000)) {
+            if (isOnline) {
+              timerService.updateTimer(prev.sessionId, updates, isDemo, demoTimerContext);
+              lastSyncTimeRef.current = now;
+            } else {
+              // Queue update for later sync when offline
+              syncService.queueUpdate(prev.sessionId, updates);
+            }
           }
 
           return { ...prev, ...updates };
@@ -89,36 +160,53 @@ export const TimerProvider = ({ children }) => {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [timerState.isRunning, isDemo, organization, settings]);
+  }, [timerState.isRunning, isDemo, organization, settings, isOnline, phaseConfig]);
 
   const updateLocalAndRemoteTimer = (updates) => {
-    setTimerState(prev => ({ ...prev, ...updates }));
+    setTimerState(prev => {
+      const newState = { ...prev, ...updates, lastUpdated: Date.now() };
+      offlineStorage.saveTimerState(newState);
+      return newState;
+    });
+
     if (timerState.sessionId) {
-      timerService.updateTimer(timerState.sessionId, updates, isDemo);
+      if (isOnline) {
+        timerService.updateTimer(timerState.sessionId, updates, isDemo, demoTimerContext);
+      } else {
+        syncService.queueUpdate(timerState.sessionId, updates);
+      }
     }
   };
 
   const startTimer = async (room) => {
-    const isIndividual = isDemo && !organization;
-    const prepTime = isIndividual ? 5 : settings.preparationTime;
-    
+    // Load phase configuration for this room
+    const config = await phaseConfigService.getRoomPhaseConfig(room.id, isDemo);
+    setPhaseConfig(config);
+
+    const firstPhase = config.phases[0];
+    const initialTime = firstPhase.durationMinutes * 60000;
+
     const sessionId = `session_${Date.now()}_${user.uid}`;
     const initialState = {
       isRunning: true,
-      timeRemaining: prepTime * 60000,
-      totalTime: prepTime * 60000,
-      phase: 'preparation',
+      timeRemaining: initialTime,
+      totalTime: initialTime,
+      phase: firstPhase.id,
+      phaseIndex: 0,
       sessionId,
       roomId: room.id,
       userId: user.uid,
       startedAt: Date.now(),
-      overtimeSeconds: 0
+      overtimeSeconds: 0,
+      phaseConfigId: config.id
     };
 
     setCurrentRoom(room);
     setTimerState(initialState);
-    
-    await timerService.createSession(sessionId, initialState, isDemo);
+
+    // Pass demoTimerContext to timerService
+    await timerService.createSession(sessionId, initialState, isDemo, demoTimerContext);
+
     if (!room.isVirtual) {
       await roomService.updateRoomStatus(room.id, {
         available: false,
@@ -132,8 +220,9 @@ export const TimerProvider = ({ children }) => {
     if (timerState.sessionId) {
       // Analytics Telemetry: Track performance before completion
       const sessionDuration = Date.now() - timerState.startedAt;
-      const punctualityScore = timerState.phase === 'overtime' ? -timerState.overtimeSeconds : 100;
-      
+      const isOvertime = phaseConfig && timerState.phaseIndex >= phaseConfig.phases.length - 1;
+      const punctualityScore = isOvertime ? -timerState.overtimeSeconds : 100;
+
       console.log('Dispatching Telemetry:', {
         sessionId: timerState.sessionId,
         duration: sessionDuration,
@@ -141,64 +230,62 @@ export const TimerProvider = ({ children }) => {
         orgId: organization?.id || 'individual'
       });
 
-      await timerService.completeSession(timerState.sessionId, currentRoom?.id, isDemo);
+      // Pass demoTimerContext to timerService
+      await timerService.completeSession(timerState.sessionId, currentRoom?.id, isDemo, demoTimerContext);
+      await offlineStorage.clearTimerState();
     }
-    const isIndividual = isDemo && !organization;
-    const prepTime = isIndividual ? 5 : settings.preparationTime;
-    
+
+    const defaultConfig = phaseConfigService.getDefaultConfig();
+    const firstPhase = defaultConfig.phases[0];
+
     setTimerState({
       isRunning: false,
-      timeRemaining: prepTime * 60000,
-      totalTime: prepTime * 60000,
-      phase: 'preparation',
+      timeRemaining: firstPhase.durationMinutes * 60000,
+      totalTime: firstPhase.durationMinutes * 60000,
+      phase: firstPhase.id,
+      phaseIndex: 0,
       sessionId: null,
       overtimeSeconds: 0
     });
     setCurrentRoom(null);
+    setPhaseConfig(null);
   };
 
   const skipPhase = () => {
-    setTimerState(prev => {
-      const phases = ['preparation', 'presentation', 'q&a', 'overtime'];
-      const currentIndex = phases.indexOf(prev.phase);
-      if (currentIndex >= phases.length - 1) return prev;
+    if (!phaseConfig) return;
 
-      const nextPhase = phases[currentIndex + 1];
-      const isIndividual = isDemo && !organization;
-      
-      let newTime = 0;
-      switch (nextPhase) {
-        case 'presentation': 
-          newTime = (isIndividual ? 20 : settings.presentationTime) * 60000; 
-          break;
-        case 'q&a': 
-          newTime = (isIndividual ? 5 : settings.qaTime) * 60000; 
-          break;
-        case 'overtime': 
-          newTime = 0; 
-          break;
-      }
-      
+    setTimerState(prev => {
+      const nextPhaseIndex = prev.phaseIndex + 1;
+      if (nextPhaseIndex >= phaseConfig.phases.length) return prev;
+
+      const nextPhase = phaseConfig.phases[nextPhaseIndex];
+      const newTime = nextPhase.durationMinutes === 0 ? 0 : nextPhase.durationMinutes * 60000;
+
       const updates = {
-        phase: nextPhase,
+        phase: nextPhase.id,
+        phaseIndex: nextPhaseIndex,
         timeRemaining: newTime,
         totalTime: newTime,
         overtimeSeconds: 0
       };
-      
-      if (prev.sessionId) timerService.updateTimer(prev.sessionId, updates, isDemo);
+
+      if (prev.sessionId) timerService.updateTimer(prev.sessionId, updates, isDemo, demoTimerContext);
       setFiredThresholds([]);
       return { ...prev, ...updates };
     });
   };
 
   const addTime = (minutes) => {
-    if (timerState.phase === 'overtime') return;
+    if (!phaseConfig) return;
+
+    const currentPhase = phaseConfig.phases[timerState.phaseIndex];
+    if (currentPhase?.durationMinutes === 0) return; // Can't add time to infinite phase
+
     const msToAdd = minutes * 60000;
     setTimerState(prev => {
       const newTime = prev.timeRemaining + msToAdd;
       const updates = { timeRemaining: newTime };
-      if (prev.sessionId) timerService.updateTimer(prev.sessionId, updates, isDemo);
+      if (prev.sessionId) timerService.updateTimer(prev.sessionId, updates, isDemo, demoTimerContext);
       return { ...prev, ...updates };
     });
   };
@@ -206,6 +293,7 @@ export const TimerProvider = ({ children }) => {
   const value = {
     timerState,
     currentRoom,
+    phaseConfig,
     settings,
     setSettings,
     startTimer,
@@ -213,7 +301,8 @@ export const TimerProvider = ({ children }) => {
     skipPhase,
     addTime,
     setCurrentRoom,
-    updateTimer: updateLocalAndRemoteTimer
+    updateTimer: updateLocalAndRemoteTimer,
+    isOnline
   };
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

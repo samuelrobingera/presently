@@ -1,9 +1,11 @@
 import React from 'react';
-import { Clock, Wifi, Settings, User, LogOut } from 'lucide-react';
+import { Clock, Wifi, Settings, User, LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const AppLayout = ({ children, onShowSettings, view, setView }) => {
-  const { user, organization, userRole, logout, isDemo } = useAuth();
+  const { user, organization, userRole, logout, isDemo, isSuperAdminUser } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -24,6 +26,16 @@ const AppLayout = ({ children, onShowSettings, view, setView }) => {
             </div>
             
             <div className="flex items-center space-x-6">
+              {isSuperAdminUser && (
+                <button
+                  onClick={() => navigate('/super-admin')}
+                  className="px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all bg-gradient-to-r from-rose-600 to-rose-700 text-white hover:from-rose-700 hover:to-rose-800 shadow-xl shadow-rose-900/30 flex items-center space-x-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Super-Admin</span>
+                </button>
+              )}
+
               {organization && (userRole === 'owner' || userRole === 'admin') && (
                 <button
                   onClick={() => setView('org')}
@@ -32,7 +44,7 @@ const AppLayout = ({ children, onShowSettings, view, setView }) => {
                   Admin Control
                 </button>
               )}
-              
+
               <div className="h-8 w-px bg-slate-800 mx-2"></div>
 
               <div className="flex items-center space-x-4">

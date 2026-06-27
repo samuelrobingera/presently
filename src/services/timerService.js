@@ -14,9 +14,24 @@ import {
 } from 'firebase/firestore';
 import { db, rtdb } from '../config/firebase';
 
+/**
+ * Timer Service
+ *
+ * Handles timer session lifecycle (create, update, subscribe, complete)
+ * Supports both production (Firebase) and demo modes (DemoTimerContext)
+ *
+ * Note: demoTimerContext is passed as parameter to avoid circular dependency
+ */
+
 export const timerService = {
-  createSession: async (sessionId, sessionData, isDemo = false) => {
-    if (isDemo) return;
+  createSession: async (sessionId, sessionData, isDemo = false, demoTimerContext = null) => {
+    if (isDemo) {
+      // Demo mode: use DemoTimerContext
+      if (demoTimerContext) {
+        demoTimerContext.createDemoSession(sessionId, sessionData);
+      }
+      return;
+    }
 
     try {
       // 1. Create session in Firestore for persistence
@@ -37,9 +52,18 @@ export const timerService = {
     }
   },
 
-  subscribeToTimer: (sessionId, callback, isDemo = false) => {
-    if (isDemo || !sessionId) return () => {};
+  subscribeToTimer: (sessionId, callback, isDemo = false, demoTimerContext = null) => {
+    if (!sessionId) return () => {};
 
+    if (isDemo) {
+      // Demo mode: subscribe to DemoTimerContext
+      if (demoTimerContext) {
+        return demoTimerContext.subscribeToDemoSession(sessionId, callback);
+      }
+      return () => {};
+    }
+
+    // Production mode: subscribe to RTDB
     const timerRef = ref(rtdb, `timers/${sessionId}`);
     const listener = onValue(timerRef, (snapshot) => {
       const data = snapshot.val();
@@ -51,9 +75,18 @@ export const timerService = {
     return () => off(timerRef, 'value', listener);
   },
 
-  updateTimer: async (sessionId, updates, isDemo = false) => {
-    if (isDemo || !sessionId) return;
+  updateTimer: async (sessionId, updates, isDemo = false, demoTimerContext = null) => {
+    if (!sessionId) return;
 
+    if (isDemo) {
+      // Demo mode: update DemoTimerContext
+      if (demoTimerContext) {
+        demoTimerContext.updateDemoSession(sessionId, updates);
+      }
+      return;
+    }
+
+    // Production mode: update RTDB
     try {
       await update(ref(rtdb, `timers/${sessionId}`), {
         ...updates,
@@ -64,9 +97,18 @@ export const timerService = {
     }
   },
 
-  completeSession: async (sessionId, roomId, isDemo = false) => {
-    if (isDemo || !sessionId) return;
+  completeSession: async (sessionId, roomId, isDemo = false, demoTimerContext = null) => {
+    if (!sessionId) return;
 
+    if (isDemo) {
+      // Demo mode: terminate session in DemoTimerContext
+      if (demoTimerContext) {
+        demoTimerContext.terminateDemoSession(sessionId);
+      }
+      return;
+    }
+
+    // Production mode: clean up Firebase
     try {
       // 1. Update Firestore session
       await updateDoc(doc(db, 'sessions', sessionId), {
@@ -84,7 +126,7 @@ export const timerService = {
         });
       }
 
-      // 3. Remove from RTDB
+      // 3. Remove from RTDB (this triggers DisplayView to clear)
       await remove(ref(rtdb, `timers/${sessionId}`));
     } catch (error) {
       console.error('Error completing session:', error);

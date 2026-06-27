@@ -76,6 +76,10 @@ export const authService = {
           id: 'org1',
           name: 'Acme Corp',
           domain: 'acme.com',
+          ownerId: 'demo_user_acme',
+          ownerEmail: 'admin@acme.com',
+          adminIds: [],
+          adminEmails: ['manager@acme.com', 'tech@acme.com'],
           settings: { ssoEnabled: true },
           subscription: { plan: 'Enterprise Pro', status: 'active', nextBillingDate: '2026-06-01' },
           paymentHistory: [{ id: 'inv_1', date: '2026-05-01', amount: 499.00, status: 'paid' }]
@@ -85,13 +89,59 @@ export const authService = {
     }
 
     try {
-      const q = query(collection(db, 'organizations'), where('domain', '==', domain));
-      const snapshot = await getDocs(q);
-      
+      // Strategy 1: Try domain match (primary method for corporate domains)
+      let q = query(
+        collection(db, 'organizations'),
+        where('active', '==', true),
+        where('domain', '==', domain)
+      );
+      let snapshot = await getDocs(q);
+
       if (!snapshot.empty) {
         const orgDoc = snapshot.docs[0];
         return { id: orgDoc.id, ...orgDoc.data() };
       }
+
+      // Strategy 2: Try multi-domain match (for orgs with multiple domains)
+      q = query(
+        collection(db, 'organizations'),
+        where('active', '==', true),
+        where('domains', 'array-contains', domain)
+      );
+      snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const orgDoc = snapshot.docs[0];
+        return { id: orgDoc.id, ...orgDoc.data() };
+      }
+
+      // Strategy 3: Try owner email exact match
+      q = query(
+        collection(db, 'organizations'),
+        where('active', '==', true),
+        where('ownerEmail', '==', email)
+      );
+      snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const orgDoc = snapshot.docs[0];
+        return { id: orgDoc.id, ...orgDoc.data() };
+      }
+
+      // Strategy 4: Try admin emails array match
+      q = query(
+        collection(db, 'organizations'),
+        where('active', '==', true),
+        where('adminEmails', 'array-contains', email)
+      );
+      snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const orgDoc = snapshot.docs[0];
+        return { id: orgDoc.id, ...orgDoc.data() };
+      }
+
+      // No organization found
       return null;
     } catch (error) {
       console.error('Error looking up organization:', error);

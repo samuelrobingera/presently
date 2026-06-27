@@ -9,12 +9,23 @@ import RoomSelector from './RoomSelector';
 import TimerInterface from './TimerInterface';
 import DisplayView from './DisplayView';
 import OrgDashboard from './org/OrgDashboard';
+import SuperAdminPortal from './superadmin/SuperAdminPortal';
+import OfflineIndicator, { ReconnectedToast } from './ui/OfflineIndicator';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 const PresentlyApp = () => {
-  const { user, loading, login } = useAuth();
+  const { user, loading, login, isSuperAdminUser } = useAuth();
   const { currentRoom } = useTimer();
+  const { isOnline, wasOffline } = useNetworkStatus();
   const [showSettings, setShowSettings] = useState(false);
+  const [showReconnected, setShowReconnected] = useState(false);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (wasOffline && isOnline) {
+      setShowReconnected(true);
+    }
+  }, [wasOffline, isOnline]);
 
   if (loading) {
     return (
@@ -28,9 +39,12 @@ const PresentlyApp = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage onLaunch={() => navigate('/app')} user={user} />} />
-      <Route path="/display/:sessionId" element={<DisplayView />} />
+    <>
+      <OfflineIndicator isOnline={isOnline} />
+      <ReconnectedToast show={showReconnected} onHide={() => setShowReconnected(false)} />
+      <Routes>
+        <Route path="/" element={<LandingPage onLaunch={() => navigate('/app')} user={user} />} />
+        <Route path="/display/:sessionId" element={<DisplayView />} />
       
       <Route 
         path="/app" 
@@ -49,8 +63,8 @@ const PresentlyApp = () => {
         } 
       />
 
-      <Route 
-        path="/app/org" 
+      <Route
+        path="/app/org"
         element={
           user ? (
             <OrgDashboard onBack={() => navigate('/app')} />
@@ -60,7 +74,20 @@ const PresentlyApp = () => {
         }
       />
 
-      <Route 
+      <Route
+        path="/super-admin"
+        element={
+          user && isSuperAdminUser ? (
+            <SuperAdminPortal />
+          ) : user ? (
+            <Navigate to="/app" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      <Route
         path="/login"
         element={
           <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -94,8 +121,9 @@ const PresentlyApp = () => {
         }
       />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 };
 

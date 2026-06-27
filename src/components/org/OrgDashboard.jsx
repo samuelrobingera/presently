@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { Database, CreditCard, MessageSquare, BarChart3, Shield, ArrowLeft, Palette } from 'lucide-react';
+import { Database, CreditCard, MessageSquare, BarChart3, Shield, ArrowLeft, Palette, MonitorPlay, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import RoomManagement from './RoomManagement';
 import Billing from './Billing';
 import Integrations from './Integrations';
 import Analytics from './Analytics';
 import BrandingSettings from './BrandingSettings';
+import RoomDashboard from '../cockpit/RoomDashboard';
+import PhaseConfigurator from './PhaseConfigurator';
 
 const OrgDashboard = ({ onBack }) => {
   const { organization, userRole } = useAuth();
-  const [activeTab, setActiveTab] = useState('rooms');
+  const [activeTab, setActiveTab] = useState('cockpit');
 
   const tabs = [
+    { id: 'cockpit', label: 'Live Cockpit', icon: <MonitorPlay className="w-4 h-4" /> },
     { id: 'rooms', label: 'Room Registry', icon: <Database className="w-4 h-4" /> },
+    { id: 'phases', label: 'Phase Templates', icon: <Clock className="w-4 h-4" /> },
     { id: 'branding', label: 'Visual Identity', icon: <Palette className="w-4 h-4" /> },
     { id: 'billing', label: 'SaaS Licensing', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'integrations', label: 'Ecosystem', icon: <MessageSquare className="w-4 h-4" /> },
@@ -69,7 +73,9 @@ const OrgDashboard = ({ onBack }) => {
 
         {/* Main Content Area */}
         <main className="flex-grow bg-white rounded-[48px] p-12 shadow-sm border border-slate-100 min-h-[600px]">
+          {activeTab === 'cockpit' && <RoomDashboard />}
           {activeTab === 'rooms' && <RoomManagement />}
+          {activeTab === 'phases' && <PhaseConfigurator />}
           {activeTab === 'branding' && <BrandingSettings />}
           {activeTab === 'billing' && <Billing />}
           {activeTab === 'integrations' && <Integrations />}

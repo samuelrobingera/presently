@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
+import { isSuperAdmin } from '../utils/superAdmin';
 
 const AuthContext = createContext();
 
@@ -9,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [organization, setOrganization] = useState(null);
   const [userRole, setUserRole] = useState('member');
+  const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
 
@@ -25,10 +27,14 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
         setIsDemo(false);
 
+        // Check super-admin status first
+        const isSuperAdminCheck = isSuperAdmin(firebaseUser.email);
+        setIsSuperAdminUser(isSuperAdminCheck);
+
         try {
           const org = await authService.lookupOrganization(firebaseUser.email, false);
           setOrganization(org);
-          
+
           if (org) {
             if (org.ownerId === firebaseUser.uid) {
               setUserRole('owner');
@@ -45,6 +51,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setOrganization(null);
         setUserRole('member');
+        setIsSuperAdminUser(false);
       }
       setLoading(false);
     });
@@ -58,6 +65,10 @@ export const AuthProvider = ({ children }) => {
       const loggedInUser = await authService.login(provider, demo);
       setUser(loggedInUser);
       setIsDemo(demo);
+
+      // Check super-admin status
+      const isSuperAdminCheck = isSuperAdmin(loggedInUser.email);
+      setIsSuperAdminUser(isSuperAdminCheck);
 
       const org = await authService.lookupOrganization(loggedInUser.email, demo);
       setOrganization(org);
@@ -87,6 +98,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setOrganization(null);
       setUserRole('member');
+      setIsSuperAdminUser(false);
       setIsDemo(false);
     } catch (error) {
       console.error('Logout failed:', error);
@@ -97,6 +109,7 @@ export const AuthProvider = ({ children }) => {
     user,
     organization,
     userRole,
+    isSuperAdminUser,
     loading,
     isDemo,
     login,

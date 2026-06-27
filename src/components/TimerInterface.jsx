@@ -3,15 +3,17 @@ import { Play, Pause, Square, SkipForward, Database, Plus, Minus, AlertCircle, S
 import { useTimer } from '../context/TimerContext';
 import { useAuth } from '../context/AuthContext';
 import PairingModal from './ui/PairingModal';
+import { formatTime, formatOvertime, getPhaseStyles, shouldFlash as shouldFlashUtil } from '../utils/timerUtils';
 
 const TimerInterface = () => {
-  const { 
-    timerState, 
-    currentRoom, 
-    settings, 
-    startTimer, 
-    stopTimer, 
-    updateTimer, 
+  const {
+    timerState,
+    currentRoom,
+    phaseConfig,
+    settings,
+    startTimer,
+    stopTimer,
+    updateTimer,
     setCurrentRoom,
     skipPhase,
     addTime
@@ -26,17 +28,12 @@ const TimerInterface = () => {
     setShowPairingModal(true);
   };
 
+  const currentPhase = phaseConfig?.phases[timerState.phaseIndex];
+
   useEffect(() => {
     let flashInterval;
-    const minutesLeft = Math.ceil(timerState.timeRemaining / 60000);
 
-    const shouldFlash = 
-      (timerState.phase === 'preparation' && minutesLeft <= 2 && timerState.timeRemaining > 0) ||
-      (timerState.phase === 'presentation' && timerState.timeRemaining === 0) ||
-      (timerState.phase === 'q&a' && minutesLeft <= 1) ||
-      (timerState.phase === 'overtime');
-
-    if (shouldFlash && timerState.isRunning) {
+    if (currentPhase && shouldFlashUtil(currentPhase, timerState.timeRemaining, timerState.isRunning)) {
       flashInterval = setInterval(() => {
         setIsFlashing(prev => !prev);
       }, 500);
@@ -45,49 +42,7 @@ const TimerInterface = () => {
     }
 
     return () => clearInterval(flashInterval);
-  }, [timerState.phase, timerState.timeRemaining, timerState.isRunning]);
-
-  const formatTime = (ms) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(Math.abs(totalSeconds) / 60);
-    const seconds = Math.floor(Math.abs(totalSeconds) % 60);
-    const sign = totalSeconds < 0 ? '-' : '';
-    return `${sign}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const formatOvertime = (totalSeconds) => {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `-${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const getPhaseStyles = (phase, timeRemaining) => {
-    const minutesLeft = Math.ceil(timeRemaining / 60000);
-    
-    switch (phase) {
-      case 'preparation':
-        if (timeRemaining === 0) return 'bg-rose-700 text-white';
-        if (minutesLeft <= 2) return isFlashing ? 'bg-amber-400 text-black' : 'bg-slate-800 text-white';
-        return 'bg-slate-800 text-white';
-      
-      case 'presentation':
-        if (timeRemaining === 0) return isFlashing ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-900';
-        if (minutesLeft <= 2 || minutesLeft <= 5) return 'bg-amber-400 text-black';
-        return 'bg-slate-900 text-white shadow-2xl shadow-slate-400';
-      
-      case 'q&a':
-        if (timeRemaining === 0) return 'animate-pulse bg-rose-700 text-white';
-        if (minutesLeft <= 1) return isFlashing ? 'bg-rose-500 text-white' : 'bg-rose-600 text-white';
-        return 'bg-rose-600 text-white';
-      
-      case 'overtime':
-        const pulseClass = Math.floor(timerState.overtimeSeconds / 120) % 2 === 0 ? 'bg-rose-800' : 'bg-black';
-        return `${pulseClass} text-white animate-pulse shadow-2xl shadow-rose-900/50`;
-      
-      default:
-        return 'bg-slate-500 text-white';
-    }
-  };
+  }, [currentPhase, timerState.timeRemaining, timerState.isRunning]);
 
   const toggleTimer = () => {
     updateTimer({ isRunning: !timerState.isRunning });
@@ -121,20 +76,23 @@ const TimerInterface = () => {
         </div>
 
         {/* Main Timer Stage */}
-        <div className={`rounded-[64px] shadow-2xl p-20 text-center transition-all duration-700 transform border-8 border-white/10 ${getPhaseStyles(timerState.phase, timerState.timeRemaining)}`}>
+        <div
+          className="rounded-[64px] shadow-2xl p-20 text-center transition-all duration-700 transform border-8 border-white/10"
+          style={currentPhase ? getPhaseStyles(currentPhase, timerState.timeRemaining, timerState.overtimeSeconds, isFlashing) : {}}
+        >
           <div className="mb-10">
             <div className="inline-flex items-center px-8 py-2.5 rounded-full bg-black/10 backdrop-blur-md text-[10px] font-black uppercase tracking-[0.3em] mb-12 border border-white/5">
-              {timerState.phase} Phase {timerState.phase === 'overtime' && 'Critical'}
+              {currentPhase?.name || timerState.phase} Phase {currentPhase?.durationMinutes === 0 && 'Critical'}
             </div>
-            
+
             <div className="text-[14rem] font-black leading-none tracking-tighter tabular-nums mb-6 drop-shadow-2xl">
-              {timerState.phase === 'overtime' 
+              {currentPhase?.durationMinutes === 0
                 ? formatOvertime(timerState.overtimeSeconds)
                 : formatTime(timerState.timeRemaining)
               }
             </div>
 
-            {timerState.phase !== 'overtime' && timerState.timeRemaining > 0 && (
+            {currentPhase?.durationMinutes > 0 && timerState.timeRemaining > 0 && (
               <div className="w-full max-w-3xl mx-auto bg-black/10 rounded-full h-5 overflow-hidden mt-12 border border-white/5 shadow-inner">
                 <div
                   className="h-full bg-white transition-all duration-1000 ease-linear shadow-[0_0_20px_rgba(255,255,255,0.5)]"
@@ -145,7 +103,7 @@ const TimerInterface = () => {
           </div>
 
           {/* Admin Mid-Flight Controls */}
-          {isAdmin && timerState.phase !== 'overtime' && (
+          {isAdmin && currentPhase?.durationMinutes > 0 && (
             <div className="flex justify-center items-center space-x-8 mt-16 bg-black/5 p-6 rounded-[32px] backdrop-blur-sm inline-flex border border-white/5">
               <button onClick={() => addTime(-1)} className="p-4 hover:bg-black/10 rounded-2xl transition-all active:scale-90">
                 <Minus className="w-10 h-10" />
@@ -174,8 +132,8 @@ const TimerInterface = () => {
 
            <button
              onClick={skipPhase}
-             className="bg-white p-10 rounded-[40px] border border-slate-100 font-black text-2xl flex flex-col items-center justify-center hover:bg-slate-50 transition-all transform active:scale-95 group shadow-xl shadow-slate-200/50"
-             disabled={timerState.phase === 'overtime'}
+             className="bg-white p-10 rounded-[40px] border border-slate-100 font-black text-2xl flex flex-col items-center justify-center hover:bg-slate-50 transition-all transform active:scale-95 group shadow-xl shadow-slate-200/50 disabled:opacity-50"
+             disabled={!phaseConfig || timerState.phaseIndex >= phaseConfig.phases.length - 1}
            >
              <SkipForward className="w-12 h-12 mb-3 text-slate-900 group-hover:translate-x-2 transition-transform" />
              <span className="uppercase tracking-widest">Skip Phase</span>

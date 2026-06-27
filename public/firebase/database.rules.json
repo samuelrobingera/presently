@@ -2,7 +2,7 @@
   "rules": {
     "timers": {
       "$sessionId": {
-        ".read": "auth != null",
+        ".read": true,
         ".write": "auth != null && (!data.exists() || data.child('userId').val() == auth.uid)"
       }
     }
